@@ -90,3 +90,56 @@ class PerturbedGradientDescent(Optimizer):
                 g = g.to(device)
                 d_p = p.grad.data + group['mu'] * (p.data - g.data)
                 p.data.add_(d_p, alpha=-group['lr'])
+
+
+class SAMOptimizer(Optimizer):
+    def __init__(self, params, lr, rho=0.05):
+        """
+        初始化SAM优化器。
+        :param params: 待优化参数
+        :param lr: 学习率
+        :param rho: 扰动半径
+        """
+        defaults = dict(lr=lr, rho=rho)
+        super(SAMOptimizer, self).__init__(params, defaults)
+
+    @torch.no_grad()
+    def first_step(self):
+        """
+        SAM的第一步：沿梯度方向施加扰动。
+        """
+        for group in self.param_groups:
+            rho = group['rho']
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                grad_norm = torch.norm(p.grad)
+                if grad_norm != 0:
+                    e_w = rho * p.grad / grad_norm  # 归一化并乘以扰动半径
+                    p.add_(e_w)  # 添加扰动
+
+    @torch.no_grad()
+    def second_step(self):
+        """
+        SAM的第二步：应用实际的梯度更新。
+        """
+        for group in self.param_groups:
+            for p in group['params']:
+                if p.grad is None:
+                    continue
+                p.sub_(group['lr'] * p.grad)  # 梯度下降
+
+    @torch.no_grad()
+    def step(self, closure):
+        """
+        完成一个优化步骤，包含两步：
+        1. 添加扰动（first_step）。
+        2. 应用梯度更新（second_step）。
+        """
+        assert closure is not None, "SAM requires a closure to reevaluate the model."
+        # 保存原始参数
+        closure()
+        self.first_step()  # 添加扰动
+        closure()
+        self.second_step()  # 梯度更新
+
