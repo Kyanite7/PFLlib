@@ -1,20 +1,3 @@
-# PFLlib: Personalized Federated Learning Algorithm Library
-# Copyright (C) 2021  Jianqing Zhang
-
-# This program is free software; you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation; either version 2 of the License, or
-# (at your option) any later version.
-
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-
-# You should have received a copy of the GNU General Public License along
-# with this program; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
-
 import copy
 import torch
 import numpy as np
@@ -22,17 +5,22 @@ import time
 from flcore.clients.clientbase import Client
 from flcore.optimizers.fedoptimizer import SAMOptimizer  # 引入之前定义的SAM优化器
 
+
 class clientSAM(Client):
     def __init__(self, args, id, train_samples, test_samples, **kwargs):
         super().__init__(args, id, train_samples, test_samples, **kwargs)
         # 初始化SAM优化器
-        self.base_optimizer = torch.optim.SGD(self.model.parameters(), lr=args.lr)
-        self.optimizer = SAMOptimizer(self.base_optimizer.param_groups, lr=args.lr, rho=args.rho)
+        self.base_optimizer = torch.optim.SGD(self.model.parameters(), lr=self.learning_rate)
+        self.optimizer = SAMOptimizer(self.base_optimizer.param_groups, lr=self.learning_rate, rho=args.rho)
 
     def train(self):
         trainloader = self.load_train_data()
-        self.model.to(self.device)
-        self.model.train()
+        self.model.to(self.device)  # 确保模型在正确的设备上
+        self.model.train()  # 确保模型处于训练模式
+
+        # 确保模型参数启用梯度
+        for param in self.model.parameters():
+            param.requires_grad = True  # 强制要求所有参数的梯度
 
         start_time = time.time()
 
@@ -42,24 +30,32 @@ class clientSAM(Client):
 
         for epoch in range(max_local_epochs):
             for i, (x, y) in enumerate(trainloader):
-                if isinstance(x, list):  # 检查是否为列表
-                    x[0] = x[0].to(self.device)
-                else:
-                    x = x.to(self.device)
+                # 确保输入数据在正确设备上并为浮点类型
+                x = x.to(self.device, dtype=torch.float32)
                 y = y.to(self.device)
 
                 if self.train_slow:
                     time.sleep(0.1 * np.abs(np.random.rand()))
 
-                # SAM 的两步训练
+                # 定义闭包函数
                 def closure():
-                    self.optimizer.zero_grad()  # 清空梯度
-                    output = self.model(x)  # 前向传播
-                    loss = self.loss(output, y)  # 计算损失
-                    loss.backward()  # 反向传播
+                    self.optimizer.zero_grad()
+                    output = self.model(x)
+
+                    # 检查模型输出是否要求梯度
+                    if not output.requires_grad:
+                        raise RuntimeError(f"Model output does not require gradients. Output shape: {output.shape}")
+
+                    loss = self.loss(output, y)
+
+                    # 检查损失是否需要梯度
+                    if not loss.requires_grad:
+                        raise RuntimeError("Loss does not require gradients. Check model and data.")
+
+                    loss.backward()
                     return loss
 
-                # SAM第一步：扰动权重，重新计算梯度
+                # 使用 SAM 优化器的两步训练
                 self.optimizer.step(closure)
 
         self.model.cpu()

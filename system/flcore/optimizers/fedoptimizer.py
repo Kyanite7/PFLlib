@@ -137,9 +137,7 @@ class SAMOptimizer(Optimizer):
         2. 应用梯度更新（second_step）。
         """
         assert closure is not None, "SAM requires a closure to reevaluate the model."
-        # 保存原始参数
         closure()
         self.first_step()  # 添加扰动
         closure()
         self.second_step()  # 梯度更新
-

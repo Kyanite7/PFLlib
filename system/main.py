@@ -501,6 +501,8 @@ if __name__ == "__main__":
     # FedDBE
     parser.add_argument('-mo', "--momentum", type=float, default=0.1)
     parser.add_argument('-klw', "--kl_weight", type=float, default=0.0)
+    # FedSAM
+    parser.add_argument('-rho', "--rho", type=float, default=0.05)
 
 
     args = parser.parse_args()
