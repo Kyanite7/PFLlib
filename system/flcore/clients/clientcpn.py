@@ -27,15 +27,11 @@ class clientCPN(Client):
             head_g=copy.deepcopy(self.model.head),
             base=copy.deepcopy(self.model.base)
         )
-        self.opt = torch.optim.SGD(self.model.parameters(),
-                                   lr=self.learning_rate,
-                                   weight_decay=self.mu)
-
         self.GCE = copy.deepcopy(args.GCE)
-        self.GCE_opt = torch.optim.SGD(self.GCE.parameters(),
-                                       lr=self.learning_rate,
-                                       weight_decay=self.mu)
         self.GCE_frozen = copy.deepcopy(self.GCE)
+
+        all_params = list(self.model.parameters()) + list(self.GCE.parameters())
+        self.optimizer = torch.optim.Adam(all_params, lr=self.learning_rate, weight_decay=self.mu)
 
         trainloader = self.load_train_data()
         self.sample_per_class = torch.zeros(self.num_classes).to(self.device)
@@ -85,10 +81,8 @@ class clientCPN(Client):
                 loss += torch.norm(feat - emb, 2) * self.mu
 
                 self.optimizer.zero_grad()
-                self.GCE_opt.zero_grad()
                 loss.backward()
                 self.optimizer.step()
-                self.GCE_opt.step()
 
         # self.model.cpu()
 
