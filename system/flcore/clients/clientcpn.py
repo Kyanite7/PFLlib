@@ -31,7 +31,6 @@ class clientCPN(Client):
                                    lr=self.learning_rate,
                                    weight_decay=self.mu)
 
-        # 全局类别嵌入
         self.GCE = copy.deepcopy(args.GCE)
         self.GCE_opt = torch.optim.SGD(self.GCE.parameters(),
                                        lr=self.learning_rate,
